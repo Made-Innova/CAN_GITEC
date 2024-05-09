@@ -3,6 +3,7 @@
 
 #ifdef ARDUINO_ARCH_ESP32
 
+#include <Arduino.h>
 #include "esp_intr.h"
 #include "soc/dport_reg.h"
 #include "driver/gpio.h"
@@ -32,6 +33,8 @@
 #define REG_AMRn(n) (0x14 + n)
 
 #define REG_CDR 0x1F
+
+unsigned long timeErrorCan = 0;
 
 ESP32SJA1000Class::ESP32SJA1000Class() : CANControllerClass(),
                                          _rxPin(DEFAULT_CAN_RX_PIN),
@@ -213,6 +216,8 @@ int ESP32SJA1000Class::endPacket()
     modifyRegister(REG_CMR, 0x1f, 0x01);
   }
 
+  timeErrorCan = millis();
+
   // wait for TX complete
   while ((readRegister(REG_SR) & 0x08) != 0x08)
   {
@@ -221,6 +226,14 @@ int ESP32SJA1000Class::endPacket()
       modifyRegister(REG_CMR, 0x1f, 0x02); // error, abort
       return 0;
     }
+
+    if (millis() > timeErrorCan + 700)
+    {
+      timeErrorCan = millis();
+      modifyRegister(REG_CMR, 0x1f, 0x02); // error, abort
+      return 0;
+    }
+
     yield();
   }
 
